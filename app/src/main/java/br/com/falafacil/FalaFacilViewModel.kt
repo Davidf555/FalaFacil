@@ -223,7 +223,7 @@ class FalaFacilViewModel(application: Application) : AndroidViewModel(applicatio
         val cleaned = phrases.map(String::trim)
             .filter(String::isNotEmpty)
             .filterNot(::containsBlockedTerm)
-            .take(5)
+            .take(10)
         _uiState.value = _uiState.value.copy(quickPhrases = cleaned)
         viewModelScope.launch {
             try {
@@ -319,7 +319,7 @@ class FalaFacilViewModel(application: Application) : AndroidViewModel(applicatio
                         quickPhrases = if (preferences.contains(QUICK_PHRASES)) {
                             decodePhrases(preferences[QUICK_PHRASES].orEmpty())
                                 .filterNot(::containsBlockedTerm)
-                                .take(5)
+                                .take(10)
                         } else {
                             DEFAULT_QUICK_PHRASES
                         }

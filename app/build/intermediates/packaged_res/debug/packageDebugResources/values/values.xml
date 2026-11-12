@@ -34,7 +34,7 @@
     <string name="preferences_save_error">Não foi possível salvar as configurações no aparelho.</string>
     <string name="quick_phrases">Frases rápidas</string>
     <string name="quick_phrases_hint">Uma frase por linha</string>
-    <string name="quick_phrases_support">Até 5 frases. Deixe uma linha vazia para ocultar a frase.</string>
+    <string name="quick_phrases_support">Até 10 frases. Deixe uma linha vazia para ocultar a frase.</string>
     <string name="repeat_300">0,3 s</string>
     <string name="repeat_600">0,6 s</string>
     <string name="repeat_interval">Ignorar toque repetido</string>
