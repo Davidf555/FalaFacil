@@ -1,0 +1,14 @@
+[
+    {
+        "merged": "br.com.falafacil.app-debug-39:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "br.com.falafacil.app-main-41:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "br.com.falafacil.app-debug-39:/mipmap-anydpi_ic_launcher.xml.flat",
+        "source": "br.com.falafacil.app-main-41:/mipmap-anydpi/ic_launcher.xml"
+    },
+    {
+        "merged": "br.com.falafacil.app-debug-39:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "br.com.falafacil.app-main-41:/mipmap-anydpi-v26/ic_launcher.xml"
+    }
+]
