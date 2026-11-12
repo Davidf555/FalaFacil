@@ -12,6 +12,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -66,6 +68,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -74,6 +77,7 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -124,6 +128,7 @@ fun FalaFacilScreen(
     var showHistory by remember { mutableStateOf(false) }
     var dismissVoiceWarning by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val visibleVoiceWarning = state.voiceUnavailable && !dismissVoiceWarning
     Column(
@@ -183,15 +188,26 @@ fun FalaFacilScreen(
                             color = androidx.compose.ui.graphics.Color(0xFF757575)
                         )
                     } else {
-                        Text(
-                            text = state.text,
+                        BasicTextField(
+                            value = state.text,
+                            onValueChange = viewModel::onTextChanged,
                             modifier = Modifier.fillMaxWidth(),
-                            fontSize = 32.sp,
-                            lineHeight = 38.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            textAlign = TextAlign.Start,
-                            overflow = TextOverflow.Clip
+                            textStyle = TextStyle(
+                                fontSize = 32.sp,
+                                lineHeight = 38.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                textAlign = TextAlign.Start
+                            ),
+                            keyboardOptions = KeyboardOptions(
+                                capitalization = KeyboardCapitalization.Sentences,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onDone = { focusManager.clearFocus() }
+                            ),
+                            singleLine = true,
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary)
                         )
                     }
                 }
