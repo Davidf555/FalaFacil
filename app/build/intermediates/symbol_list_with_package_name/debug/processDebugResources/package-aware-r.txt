@@ -172,9 +172,11 @@ layout notification_template_icon_group
 layout notification_template_part_chronometer
 layout notification_template_part_time
 mipmap ic_launcher
+raw blocked_terms
 string androidx_startup
 string app_name
 string autofill
+string blocked_speech_message
 string call_notification_answer_action
 string call_notification_answer_video_action
 string call_notification_decline_action

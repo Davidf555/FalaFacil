@@ -8,6 +8,7 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.text.KeyboardOptions
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,11 +29,7 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -87,7 +83,6 @@ import androidx.compose.ui.unit.sp
 import br.com.falafacil.FalaFacilUiState
 import br.com.falafacil.FalaFacilViewModel
 import br.com.falafacil.R
-import kotlin.math.ceil
 
 private enum class KeyAction {
     LETTER,
@@ -104,7 +99,8 @@ private data class KeyboardKey(
     val label: String,
     val description: String,
     val action: KeyAction,
-    val value: String = ""
+    val value: String = "",
+    val columnSpan: Int = 1
 )
 
 private enum class KeyboardMode {
@@ -157,7 +153,7 @@ fun FalaFacilScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(if (isLandscape) 72.dp else 136.dp)
+                .height(72.dp)
                 .padding(vertical = 2.dp)
         ) {
             Surface(
@@ -213,15 +209,13 @@ fun FalaFacilScreen(
 
         QuickPhraseStrip(
             phrases = state.quickPhrases,
-            compact = isLandscape,
             onPhraseClick = viewModel::speakPhrase
         )
-        val suggestions = wordSuggestions(state.text)
+        val suggestions = wordSuggestions(state.text, viewModel::containsBlockedTerm)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(if (isLandscape) 36.dp else 44.dp)
-                .padding(vertical = 2.dp),
+                .height(36.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             suggestions.forEach { suggestion ->
@@ -235,7 +229,7 @@ fun FalaFacilScreen(
                 ) {
                     Text(
                         text = suggestion,
-                        fontSize = if (isLandscape) 14.sp else 16.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -252,92 +246,71 @@ fun FalaFacilScreen(
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val columns = if (isLandscape) state.landscapeColumns else 6
                 val keys = keyboardKeys(mode, context, state.isSpeaking)
-                val rows = ceil(keys.size.toFloat() / columns).toInt()
-                val finalRowSize = (keys.size % columns).let { if (it == 0) columns else it }
-                val finalRow = keys.takeLast(finalRowSize)
-                val scrollableKeys = keys.dropLast(finalRow.size)
-                val rowHeight = ((maxHeight - 8.dp * (rows - 1) - 8.dp) / rows)
-                    .coerceAtLeast(if (isLandscape) 44.dp else 64.dp)
-                Column(modifier = Modifier.fillMaxSize()) {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(columns),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                userScrollEnabled = true
-            ) {
-                items(scrollableKeys, key = KeyboardKey::id) { key ->
-                    KeyboardKeyButton(
-                        key = key,
-                        height = rowHeight,
-                        onTap = {
-                            if (viewModel.onKeyTap(key.id)) {
-                                when (key.action) {
-                                    KeyAction.LETTER -> viewModel.appendText(key.value)
-                                    KeyAction.SPACE -> viewModel.appendText(" ")
-                                    KeyAction.ACCENT_MODE -> pendingMode = KeyboardMode.ACCENTS
-                                    KeyAction.NUMBER_MODE -> pendingMode = KeyboardMode.NUMBERS
-                                    KeyAction.ALPHABET_MODE -> pendingMode = KeyboardMode.LETTERS
-                                    KeyAction.DELETE -> viewModel.deleteLastCharacter()
-                                    KeyAction.SPEAK -> viewModel.speak()
-                                }
-                                if (mode == KeyboardMode.ACCENTS && key.action != KeyAction.ACCENT_MODE) {
-                                    pendingMode = KeyboardMode.LETTERS
-                                }
-                                if (state.vibrationEnabled) vibrate(context)
-                            }
-                        },
-                        onTapComplete = {
-                            pendingMode?.let {
-                                mode = it
-                                pendingMode = null
+                val rows = arrangeKeyboardRows(keys, columns)
+                val rowHeight = ((maxHeight - 8.dp * (rows.size - 1)) / rows.size)
+                    .coerceAtLeast(64.dp)
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    rows.forEach { row ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            row.forEach { key ->
+                                KeyboardKeyButton(
+                                    key = key,
+                                    height = rowHeight,
+                                    modifier = Modifier.weight(key.columnSpan.toFloat()),
+                                    onTap = {
+                                        if (viewModel.onKeyTap(key.id)) {
+                                            when (key.action) {
+                                                KeyAction.LETTER -> viewModel.appendText(key.value)
+                                                KeyAction.SPACE -> viewModel.appendText(" ")
+                                                KeyAction.ACCENT_MODE -> pendingMode = KeyboardMode.ACCENTS
+                                                KeyAction.NUMBER_MODE -> pendingMode = KeyboardMode.NUMBERS
+                                                KeyAction.ALPHABET_MODE -> pendingMode = KeyboardMode.LETTERS
+                                                KeyAction.DELETE -> viewModel.deleteLastCharacter()
+                                                KeyAction.SPEAK -> viewModel.speak()
+                                            }
+                                            if (mode == KeyboardMode.ACCENTS && key.action != KeyAction.ACCENT_MODE) {
+                                                pendingMode = KeyboardMode.LETTERS
+                                            }
+                                            if (state.vibrationEnabled) vibrate(context)
+                                        }
+                                    },
+                                    onTapComplete = {
+                                        pendingMode?.let {
+                                            mode = it
+                                            pendingMode = null
+                                        }
+                                    }
+                                )
                             }
                         }
-                    )
+                    }
                 }
             }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                finalRow.forEach { key ->
-                    KeyboardKeyButton(
-                        key = key,
-                        height = rowHeight,
-                        modifier = Modifier.weight(1f),
-                        onTap = {
-                            if (viewModel.onKeyTap(key.id)) {
-                                when (key.action) {
-                                    KeyAction.LETTER -> viewModel.appendText(key.value)
-                                    KeyAction.SPACE -> viewModel.appendText(" ")
-                                    KeyAction.ACCENT_MODE -> pendingMode = KeyboardMode.ACCENTS
-                                    KeyAction.NUMBER_MODE -> pendingMode = KeyboardMode.NUMBERS
-                                    KeyAction.ALPHABET_MODE -> pendingMode = KeyboardMode.LETTERS
-                                    KeyAction.DELETE -> viewModel.deleteLastCharacter()
-                                    KeyAction.SPEAK -> viewModel.speak()
-                                }
-                                if (mode == KeyboardMode.ACCENTS && key.action != KeyAction.ACCENT_MODE) {
-                                    pendingMode = KeyboardMode.LETTERS
-                                }
-                                if (state.vibrationEnabled) vibrate(context)
-                            }
-                        },
-                        onTapComplete = {
-                            pendingMode?.let {
-                                mode = it
-                                pendingMode = null
-                            }
-                        }
+            if (state.showBlockedSpeechWarning) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(horizontal = 24.dp),
+                    color = Color(0xFFFFF3E0),
+                    shape = RoundedCornerShape(16.dp),
+                    border = androidx.compose.foundation.BorderStroke(3.dp, Color(0xFFC62828)),
+                    shadowElevation = 6.dp
+                ) {
+                    Text(
+                        text = stringResource(R.string.blocked_speech_message),
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                        fontSize = 24.sp,
+                        lineHeight = 30.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        color = Color(0xFF7F1D1D)
                     )
-                }
-                repeat(columns - finalRow.size) {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
-                    }
                 }
             }
         }
@@ -469,35 +442,43 @@ private fun LockTaskButton(isLocked: Boolean, onClick: () -> Unit) {
 @Composable
 private fun QuickPhraseStrip(
     phrases: List<String>,
-    compact: Boolean,
     onPhraseClick: (String) -> Unit
 ) {
-    LazyRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(if (compact) 36.dp else 64.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        items(phrases) { phrase ->
-            Button(
-                onClick = { onPhraseClick(phrase) },
-                modifier = Modifier.heightIn(min = if (compact) 32.dp else 56.dp),
-                shape = RoundedCornerShape(14.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = if (compact) 2.dp else 8.dp)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        phrases.chunked(3).forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = phrase,
-                    fontSize = if (compact) 14.sp else 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1
-                )
+                row.forEach { phrase ->
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 36.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color.White)
+                            .border(3.dp, Color(0xFF1565C0), RoundedCornerShape(16.dp))
+                            .clickable(role = Role.Button) { onPhraseClick(phrase) }
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = phrase,
+                            fontSize = 12.sp,
+                            lineHeight = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            textAlign = TextAlign.Center,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
             }
         }
     }
 }
 
-private fun wordSuggestions(text: String): List<String> {
+private fun wordSuggestions(text: String, isBlocked: (String) -> Boolean): List<String> {
     val words = listOf(
         "a", "agora", "ajuda", "alguém", "amigo", "amor", "as", "bem", "bom", "com",
         "comer", "como", "de", "desculpa", "dia", "do", "dor", "e", "ela", "ele", "em",
@@ -505,11 +486,33 @@ private fun wordSuggestions(text: String): List<String> {
         "me", "meu", "minha", "muito", "não", "no", "obrigado", "oi", "onde", "os",
         "para", "por", "preciso", "que", "quero", "sim", "sinto", "sua", "tenho", "um",
         "uma", "você", "vou", "água"
-    )
+    ).filterNot(isBlocked)
     val currentWord = text.substringAfterLast(' ').lowercase()
-    if (currentWord.isBlank()) return listOf("eu", "não", "sim")
+    if (currentWord.isBlank()) return listOf("eu", "não", "sim").filterNot(isBlocked)
     val matches = words.filter { it.startsWith(currentWord) && it != currentWord }.take(3)
     return (matches + words.filterNot(matches::contains).take(3 - matches.size)).take(3)
+}
+
+private fun arrangeKeyboardRows(keys: List<KeyboardKey>, columns: Int): List<List<KeyboardKey>> {
+    val rows = mutableListOf<List<KeyboardKey>>()
+    var row = mutableListOf<KeyboardKey>()
+    var occupiedColumns = 0
+    keys.forEach { key ->
+        if (occupiedColumns + key.columnSpan > columns) {
+            rows.add(row)
+            row = mutableListOf()
+            occupiedColumns = 0
+        }
+        row.add(key)
+        occupiedColumns += key.columnSpan
+        if (occupiedColumns == columns) {
+            rows.add(row)
+            row = mutableListOf()
+            occupiedColumns = 0
+        }
+    }
+    if (row.isNotEmpty()) rows.add(row)
+    return rows
 }
 
 @Composable
@@ -591,12 +594,13 @@ private fun KeyboardKeyButton(
                 icon = {
                     Text(
                         text = "␣",
-                        fontSize = 26.sp,
-                        lineHeight = 26.sp,
+                        fontSize = 36.sp,
+                        lineHeight = 36.sp,
                         fontWeight = FontWeight.Bold
                     )
                 },
-                label = key.label
+                label = key.label,
+                labelFontSize = 16.sp
             )
             else -> Text(
                 text = key.label,
@@ -612,7 +616,11 @@ private fun KeyboardKeyButton(
 }
 
 @Composable
-private fun KeyWithIcon(icon: @Composable () -> Unit, label: String) {
+private fun KeyWithIcon(
+    icon: @Composable () -> Unit,
+    label: String,
+    labelFontSize: androidx.compose.ui.unit.TextUnit = 14.sp
+) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -620,7 +628,7 @@ private fun KeyWithIcon(icon: @Composable () -> Unit, label: String) {
         icon()
         Text(
             text = label,
-            fontSize = 14.sp,
+            fontSize = labelFontSize,
             lineHeight = 15.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
@@ -808,7 +816,13 @@ private fun keyboardKeys(mode: KeyboardMode, context: Context, isSpeaking: Boole
         value = value
     )
 
-    val space = KeyboardKey("space", context.getString(R.string.space), context.getString(R.string.key_space_description), KeyAction.SPACE)
+    val space = KeyboardKey(
+        "space",
+        context.getString(R.string.space),
+        context.getString(R.string.key_space_description),
+        KeyAction.SPACE,
+        columnSpan = 2
+    )
     val delete = KeyboardKey("delete", context.getString(R.string.delete_short), context.getString(R.string.key_delete_description), KeyAction.DELETE)
     val speak = KeyboardKey(
         "speak",
@@ -821,9 +835,9 @@ private fun keyboardKeys(mode: KeyboardMode, context: Context, isSpeaking: Boole
     return when (mode) {
         KeyboardMode.LETTERS -> ('A'..'Z').map { letter(it.toString()) } + listOf(
             letter("Ç"),
-            space,
             KeyboardKey("accents", "ãéô", context.getString(R.string.key_accents_description), KeyAction.ACCENT_MODE),
             KeyboardKey("numbers", "123", context.getString(R.string.key_numbers_description), KeyAction.NUMBER_MODE),
+            space,
             delete,
             speak
         )
@@ -837,7 +851,7 @@ private fun keyboardKeys(mode: KeyboardMode, context: Context, isSpeaking: Boole
                     else -> context.getString(R.string.key_symbol_description, value)
                 }
                 letter(value, "number_$value").copy(description = description)
-            } + listOf(space, alphabet, delete, speak)
+            } + listOf(alphabet, space, delete, speak)
     }
 }
 

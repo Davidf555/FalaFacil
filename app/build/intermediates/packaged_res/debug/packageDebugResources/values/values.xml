@@ -2,6 +2,7 @@
 <resources>
     <color name="ic_launcher_background">#FFFFFF</color>
     <string name="app_name">Fala Fácil</string>
+    <string name="blocked_speech_message">Esta frase não pode ser falada</string>
     <string name="close">Fechar</string>
     <string name="columns_eight">8 colunas</string>
     <string name="columns_eleven">11 colunas</string>

@@ -16,10 +16,13 @@ import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import java.io.IOException
+import java.text.Normalizer
 import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONException
@@ -35,11 +38,11 @@ private val QUICK_PHRASES = stringPreferencesKey("quick_phrases")
 private const val MAX_RECENT_PHRASES = 20
 private const val TTS_ISSUE_ID = "fala_facil_speech"
 private val DEFAULT_QUICK_PHRASES = listOf(
-    "Sim",
-    "Não",
-    "Preciso de ajuda",
-    "Obrigado",
-    "Estou com sede"
+    "POR FAVOR",
+    "OBRIGADA",
+    "BOM DIA",
+    "BANHO",
+    "ÁGUA"
 )
 
 data class FalaFacilUiState(
@@ -52,7 +55,8 @@ data class FalaFacilUiState(
     val quickPhrases: List<String> = DEFAULT_QUICK_PHRASES,
     val statusMessage: String = "",
     val isSpeaking: Boolean = false,
-    val voiceUnavailable: Boolean = false
+    val voiceUnavailable: Boolean = false,
+    val showBlockedSpeechWarning: Boolean = false
 )
 
 class FalaFacilViewModel(application: Application) : AndroidViewModel(application) {
@@ -64,6 +68,19 @@ class FalaFacilViewModel(application: Application) : AndroidViewModel(applicatio
     private var ptBrAvailable = false
     private var lastKeyId: String? = null
     private var lastKeyTapTime = 0L
+    private var blockedSpeechWarningJob: Job? = null
+    private val blockedTerms by lazy {
+        getApplication<Application>().resources.openRawResource(R.raw.blocked_terms)
+            .bufferedReader(Charsets.UTF_8)
+            .useLines { lines ->
+                lines.map { it.substringBefore('#').trim() }
+                    .filter(String::isNotEmpty)
+                    .map(::normalizeForBlocklist)
+                    .map { it.split(' ').filter(String::isNotEmpty) }
+                    .filter { it.isNotEmpty() }
+                    .toSet()
+            }
+    }
 
     init {
         observePreferences()
@@ -203,7 +220,10 @@ class FalaFacilViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun onQuickPhrasesChanged(phrases: List<String>) {
-        val cleaned = phrases.map(String::trim).filter(String::isNotEmpty).take(5)
+        val cleaned = phrases.map(String::trim)
+            .filter(String::isNotEmpty)
+            .filterNot(::containsBlockedTerm)
+            .take(5)
         _uiState.value = _uiState.value.copy(quickPhrases = cleaned)
         viewModelScope.launch {
             try {
@@ -221,12 +241,24 @@ class FalaFacilViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun speakPhrase(text: String) {
+        val phrase = text.trim()
+        if (phrase.isNotEmpty() && containsBlockedTerm(phrase)) {
+            if (_uiState.value.isSpeaking) stop()
+            blockedSpeechWarningJob?.cancel()
+            _uiState.value = _uiState.value.copy(showBlockedSpeechWarning = true)
+            blockedSpeechWarningJob = viewModelScope.launch {
+                delay(3_000L)
+                _uiState.value = _uiState.value.copy(showBlockedSpeechWarning = false)
+            }
+            return
+        }
         if (_uiState.value.isSpeaking) {
             stop()
             return
         }
-        val phrase = text.trim()
         if (phrase.isEmpty()) return
+        blockedSpeechWarningJob?.cancel()
+        _uiState.value = _uiState.value.copy(showBlockedSpeechWarning = false)
         if (!ttsReady || !ptBrAvailable) {
             _uiState.value = _uiState.value.copy(
                 statusMessage = getApplication<Application>().getString(R.string.tts_missing_title),
@@ -285,7 +317,9 @@ class FalaFacilViewModel(application: Application) : AndroidViewModel(applicatio
                         repeatIntervalMs = preferences[REPEAT_INTERVAL_MS] ?: 0L,
                         landscapeColumns = preferences[LANDSCAPE_COLUMNS]?.takeIf { it == 8 || it == 11 } ?: 11,
                         quickPhrases = if (preferences.contains(QUICK_PHRASES)) {
-                            decodePhrases(preferences[QUICK_PHRASES].orEmpty()).take(5)
+                            decodePhrases(preferences[QUICK_PHRASES].orEmpty())
+                                .filterNot(::containsBlockedTerm)
+                                .take(5)
                         } else {
                             DEFAULT_QUICK_PHRASES
                         }
@@ -338,6 +372,62 @@ class FalaFacilViewModel(application: Application) : AndroidViewModel(applicatio
             statusMessage = getApplication<Application>().getString(messageId),
             isSpeaking = false
         )
+    }
+
+    fun containsBlockedTerm(text: String): Boolean {
+        val words = normalizeForBlocklist(text).split(' ').filter(String::isNotEmpty)
+        return blockedTerms.any { term ->
+            words.windowed(term.size).any { it == term }
+        }
+    }
+
+    private fun normalizeForBlocklist(text: String): String {
+        val decomposed = Normalizer.normalize(text.lowercase(Locale.ROOT), Normalizer.Form.NFD)
+        return buildString(decomposed.length) {
+            decomposed.forEachIndexed { index, char ->
+                if (Character.getType(char) != Character.NON_SPACING_MARK.toInt()) {
+                    val normalized = when (char) {
+                        '0' -> 'o'
+                        '1' -> 'i'
+                        '3' -> 'e'
+                        '4' -> 'a'
+                        '5' -> 's'
+                        '7' -> 't'
+                        else -> char
+                    }
+                    when {
+                        normalized.isLetterOrDigit() -> {
+                            if (lastOrNull() != normalized) append(normalized)
+                        }
+                        normalized.isWhitespace() -> {
+                            if (isNotEmpty() && last() != ' ') append(' ')
+                        }
+                        separatesWords(decomposed, index) -> {
+                            if (isNotEmpty() && last() != ' ') append(' ')
+                        }
+                    }
+                }
+            }
+        }.trim()
+    }
+
+    private fun separatesWords(text: String, index: Int): Boolean {
+        val char = text[index]
+        if (char.isLetterOrDigit()) return false
+        if (char != '.' && char != '-') return true
+        var leftLength = 0
+        var cursor = index - 1
+        while (cursor >= 0 && text[cursor].isLetterOrDigit()) {
+            leftLength++
+            cursor--
+        }
+        var rightLength = 0
+        cursor = index + 1
+        while (cursor < text.length && text[cursor].isLetterOrDigit()) {
+            rightLength++
+            cursor++
+        }
+        return leftLength > 1 || rightLength > 1
     }
 
     override fun onCleared() {

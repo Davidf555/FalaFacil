@@ -1,0 +1,90 @@
+# One blocked word or phrase per line. Matching is local and ignores accents,
+# punctuation, repeated letters, and common number substitutions.
+arrombada
+arrombado
+arrombados
+arrombadas
+babaca
+babacas
+buceta
+bucetas
+bosta
+bostas
+burra
+burro
+burros
+burras
+cacete
+cacetes
+caceta
+cacetas
+caralho
+caralhos
+corna
+corno
+cornos
+cornas
+cu
+cuzão
+cuzões
+desgraçada
+desgraçado
+desgraçados
+desgraçadas
+escrota
+escroto
+escrotos
+escrotas
+foda
+foda-se
+fudendo
+fodendo
+foder
+fudeu
+fodida
+fodido
+fodidos
+fodidas
+fudida
+fudido
+fudidos
+fudidas
+filha da puta
+filho da puta
+fdp
+pqp
+imbecil
+imbecis
+merda
+merdas
+otária
+otário
+otários
+otárias
+porra
+porras
+puta
+putas
+puto
+putos
+putaria
+putinha
+putinho
+retardada
+retardado
+retardados
+retardadas
+tomar no cu
+vai a merda
+vai pra merda
+vai se foder
+vai se fuder
+vai tomar no cu
+vagabunda
+vagabundo
+vagabundos
+vagabundas
+viado
+viada
+viados
+viadas

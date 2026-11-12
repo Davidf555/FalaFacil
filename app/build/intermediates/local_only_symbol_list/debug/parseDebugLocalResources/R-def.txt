@@ -3,7 +3,9 @@ local
 color ic_launcher_background
 drawable ic_launcher_foreground
 mipmap ic_launcher
+raw blocked_terms
 string app_name
+string blocked_speech_message
 string close
 string columns_eight
 string columns_eleven

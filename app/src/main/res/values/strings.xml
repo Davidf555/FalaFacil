@@ -54,4 +54,5 @@
     <string name="preferences_load_error">Não foi possível carregar as configurações salvas.</string>
     <string name="preferences_save_error">Não foi possível salvar as configurações no aparelho.</string>
     <string name="history_load_error">O histórico salvo estava inválido e foi ignorado.</string>
+    <string name="blocked_speech_message">Esta frase não pode ser falada</string>
 </resources>
